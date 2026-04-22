@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Loshbot AI - Business Platform</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .glass { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); }
+        .chat-container { height: calc(100vh - 300px); min-height: 400px; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+        .fade-in { animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body class="bg-slate-50 font-sans text-slate-900">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        function App() {
+            const [view, setView] = useState('LOADING');
+            const [user, setUser] = useState(null);
+            const [conversations, setConversations] = useState([]);
+            const [activeConvId, setActiveConvId] = useState(null);
+            const [messages, setMessages] = useState([]);
+            const [input, setInput] = useState("");
+            const [loading, setLoading] = useState(false);
+            const [uploading, setUploading] = useState(false);
+            const chatEndRef = useRef(null);
+
+            useEffect(() => {
+                const savedUser = localStorage.getItem('loshbot_user');
+                if (savedUser) {
+                    const parsedUser = JSON.parse(savedUser);
+                    setUser(parsedUser);
+                    fetchConversations(parsedUser.id);
+                    setView('DASHBOARD');
+                } else {
+                    setView('ONBOARDING');
+                }
+            }, []);
+
+            const fetchConversations = async (userId) => {
+                try {
+                    const res = await fetch(`/user/${userId}/conversations`);
+                    const data = await res.json();
+                    setConversations(data);
+                } catch (err) { console.error("Failed to fetch conversations", err); }
+            };
+
+            const handleOnboard = async (userData) => {
+                try {
+                    const res = await fetch('/user/onboard', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(userData)
+                    });
+                    const newUser = await res.json();
+                    setUser(newUser);
+                    localStorage.setItem('loshbot_user', JSON.stringify(newUser));
+                    setView('DASHBOARD');
+                } catch (err) { alert("Onboarding failed"); }
+            };
+
+            const startNewChat = async () => {
+                try {
+                    const res = await fetch(`/chat/create?userId=${user.id}`, { 
+                        method: 'POST',
+                        body: 'New Conversation'
+                    });
+                    const id = (await res.text()).replace(/"/g, '');
+                    setActiveConvId(id);
+                    setMessages([{ role: 'SYSTEM', content: `Hello ${user.name}! I'm ready to help with your ${user.industry} business.` }]);
+                    setView('CHAT');
+                    fetchConversations(user.id);
+                } catch (err) { console.error(err); }
+            };
+
+            const openConversation = async (conv) => {
+                setActiveConvId(conv.id);
+                // In a real app, we'd fetch messages here. For now, we'll just start fresh or show a placeholder.
+                setMessages([{ role: 'SYSTEM', content: `Resuming: ${conv.title}` }]);
+                setView('CHAT');
+            };
+
+            const sendMessage = async (e) => {
+                e.preventDefault();
+                if (!input.trim() || loading) return;
+                const userMsg = input;
+                setInput("");
+                setMessages(prev => [...prev, { role: 'USER', content: userMsg }]);
+                setLoading(true);
+                try {
+                    const res = await fetch(`/chat/${activeConvId}`, { method: 'POST', body: userMsg });
+                    const aiResponse = await res.text();
+                    setMessages(prev => [...prev, { role: 'ASSISTANT', content: aiResponse }]);
+                } catch (err) { setMessages(prev => [...prev, { role: 'SYSTEM', content: 'Connection Error.' }]); }
+                finally { setLoading(false); }
+            };
+
+            const handleFileUpload = async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const formData = new FormData();
+                formData.append('file', file);
+                setUploading(true);
+                try {
+                    await fetch('/knowledge/upload', { method: 'POST', body: formData });
+                    alert("Knowledge Base Updated!");
+                } catch (err) { alert("Upload failed"); }
+                finally { setUploading(false); }
+            };
+
+            if (view === 'LOADING') return <div class="flex items-center justify-center h-screen"><i class="fas fa-spinner fa-spin text-4xl text-indigo-600"></i></div>;
+
+            return (
+                <div class="min-h-screen pb-12">
+                    <nav class="bg-white border-b border-slate-200 mb-8 sticky top-0 z-10 shadow-sm">
+                        <div class="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
+                            <div class="flex items-center gap-2 cursor-pointer" onClick={() => user && setView('DASHBOARD')}>
+                                <div class="bg-indigo-600 w-8 h-8 rounded-lg flex items-center justify-center shadow-md shadow-indigo-200">
+                                    <i class="fas fa-robot text-white text-sm"></i>
+                                </div>
+                                <span class="font-bold text-xl tracking-tight">Loshbot</span>
+                            </div>
+                            {user && (
+                                <div class="flex items-center gap-4 text-sm font-medium">
+                                    <span class="text-slate-500 bg-slate-100 px-3 py-1 rounded-full">{user.company}</span>
+                                    <div class="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center border border-indigo-200">
+                                        {user.name[0]}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </nav>
+
+                    <main class="max-w-5xl mx-auto px-4">
+                        {view === 'ONBOARDING' && <OnboardingView onSubmit={handleOnboard} />}
+                        {view === 'DASHBOARD' && (
+                            <DashboardView 
+                                user={user} 
+                                conversations={conversations} 
+                                onNewChat={startNewChat}
+                                onOpenConv={openConversation}
+                                onUpload={handleFileUpload}
+                                uploading={uploading}
+                            />
+                        )}
+                        {view === 'CHAT' && (
+                            <ChatView 
+                                messages={messages} 
+                                input={input} 
+                                setInput={setInput} 
+                                onSend={sendMessage} 
+                                loading={loading} 
+                                onBack={() => { setView('DASHBOARD'); fetchConversations(user.id); }}
+                            />
+                        )}
+                    </main>
+                </div>
+            );
+        }
+
+        function OnboardingView({ onSubmit }) {
+            const [formData, setFormData] = useState({ name: '', company: '', industry: '' });
+            return (
+                <div class="max-w-md mx-auto fade-in mt-12">
+                    <div class="glass p-8 rounded-3xl shadow-xl border border-slate-200">
+                        <h2 class="text-2xl font-bold mb-2">Welcome to Loshbot</h2>
+                        <p class="text-slate-500 mb-8">Let's set up your business profile to get started.</p>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-semibold mb-1 ml-1">Your Name</label>
+                                <input class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all" 
+                                    placeholder="e.g. John Doe" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-semibold mb-1 ml-1">Company Name</label>
+                                <input class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all" 
+                                    placeholder="e.g. Acme Corp" value={formData.company} onChange={e => setFormData({...formData, company: e.target.value})} />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-semibold mb-1 ml-1">Industry</label>
+                                <select class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                                    value={formData.industry} onChange={e => setFormData({...formData, industry: e.target.value})}>
+                                    <option value="">Select Industry</option>
+                                    <option value="Tech">Technology</option>
+                                    <option value="Retail">Retail</option>
+                                    <option value="Finance">Finance</option>
+                                    <option value="Healthcare">Healthcare</option>
+                                </select>
+                            </div>
+                            <button 
+                                onClick={() => formData.name && formData.company && formData.industry && onSubmit(formData)}
+                                class="w-full bg-indigo-600 text-white py-4 rounded-xl font-bold mt-4 shadow-lg shadow-indigo-100 hover:bg-indigo-700 active:scale-95 transition-all"
+                            >
+                                Start My Journey
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        function DashboardView({ user, conversations, onNewChat, onOpenConv, onUpload, uploading }) {
+            return (
+                <div class="fade-in space-y-8">
+                    <div class="flex flex-col md:flex-row md:items-end justify-between gap-4">
+                        <div>
+                            <h2 class="text-3xl font-bold">Hello, {user.name} 👋</h2>
+                            <p class="text-slate-500">Welcome back to your {user.industry} assistant dashboard.</p>
+                        </div>
+                        <div class="flex gap-2">
+                            <label class="cursor-pointer bg-white border border-slate-200 hover:bg-slate-50 px-4 py-2 rounded-xl transition-all flex items-center gap-2 shadow-sm text-sm font-semibold">
+                                <i class={`fas ${uploading ? 'fa-spinner fa-spin' : 'fa-file-upload text-indigo-500'}`}></i>
+                                {uploading ? 'Processing...' : 'Knowledge Base'}
+                                <input type="file" class="hidden" onChange={onUpload} accept=".pdf" disabled={uploading} />
+                            </label>
+                            <button onClick={onNewChat} class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-xl font-bold shadow-lg shadow-indigo-100 flex items-center gap-2 transition-all">
+                                <i class="fas fa-plus"></i> New Chat
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
+                        <div class="md:col-span-2 space-y-4">
+                            <h3 class="text-lg font-bold flex items-center gap-2 ml-1">
+                                <i class="fas fa-history text-slate-400"></i> Recent Sessions
+                            </h3>
+                            {conversations.length === 0 ? (
+                                <div class="bg-white p-12 rounded-3xl border border-slate-200 text-center space-y-3">
+                                    <i class="fas fa-comment-slash text-4xl text-slate-200"></i>
+                                    <p class="text-slate-500 font-medium">No sessions yet. Start your first chat!</p>
+                                </div>
+                            ) : (
+                                <div class="grid gap-3">
+                                    {conversations.map(conv => (
+                                        <div key={conv.id} onClick={() => onOpenConv(conv)} class="bg-white p-4 rounded-2xl border border-slate-200 hover:border-indigo-400 hover:shadow-md cursor-pointer transition-all flex items-center justify-between group">
+                                            <div class="flex items-center gap-4">
+                                                <div class="bg-slate-100 w-10 h-10 rounded-xl flex items-center justify-center group-hover:bg-indigo-50 transition-colors">
+                                                    <i class="fas fa-comments text-slate-400 group-hover:text-indigo-500"></i>
+                                                </div>
+                                                <div>
+                                                    <div class="font-bold">{conv.title}</div>
+                                                    <div class="text-xs text-slate-400">{new Date(conv.createdAt).toLocaleString()}</div>
+                                                </div>
+                                            </div>
+                                            <i class="fas fa-chevron-right text-slate-300 group-hover:text-indigo-400 transition-colors"></i>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                        <div class="space-y-4">
+                            <h3 class="text-lg font-bold ml-1">Business Context</h3>
+                            <div class="bg-white p-6 rounded-3xl border border-slate-200 space-y-4">
+                                <div class="space-y-1">
+                                    <div class="text-xs font-bold text-slate-400 uppercase tracking-wider">Company</div>
+                                    <div class="font-bold text-lg">{user.company}</div>
+                                </div>
+                                <div class="space-y-1">
+                                    <div class="text-xs font-bold text-slate-400 uppercase tracking-wider">Industry</div>
+                                    <div class="font-bold text-lg">{user.industry}</div>
+                                </div>
+                                <div class="pt-4 border-t border-slate-100 flex gap-4">
+                                    <div class="text-center flex-1">
+                                        <div class="text-xl font-bold text-indigo-600">{conversations.length}</div>
+                                        <div class="text-[10px] font-bold text-slate-400 uppercase">Sessions</div>
+                                    </div>
+                                    <div class="text-center flex-1">
+                                        <div class="text-xl font-bold text-indigo-600">Active</div>
+                                        <div class="text-[10px] font-bold text-slate-400 uppercase">Status</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        function ChatView({ messages, input, setInput, onSend, loading, onBack }) {
+            const chatEndRef = useRef(null);
+            useEffect(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth" }), [messages]);
+
+            return (
+                <div class="fade-in max-w-4xl mx-auto">
+                    <div class="glass rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col">
+                        <div class="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+                            <button onClick={onBack} class="text-slate-500 hover:text-indigo-600 font-bold flex items-center gap-2 transition-all">
+                                <i class="fas fa-arrow-left"></i> Dashboard
+                            </button>
+                            <span class="text-sm font-bold text-slate-400">Live AI Session</span>
+                        </div>
+                        
+                        <div class="chat-container overflow-y-auto p-6 space-y-4 bg-white/50">
+                            {messages.map((msg, i) => (
+                                <div key={i} class={`flex ${msg.role === 'USER' ? 'justify-end' : 'justify-start'}`}>
+                                    <div class={`max-w-[85%] p-4 rounded-2xl shadow-sm ${
+                                        msg.role === 'USER' 
+                                        ? 'bg-indigo-600 text-white rounded-tr-none' 
+                                        : msg.role === 'SYSTEM' 
+                                        ? 'bg-slate-100 text-slate-500 text-xs font-bold text-center w-full shadow-none border-none'
+                                        : 'bg-white border border-slate-100 text-slate-800 rounded-tl-none'
+                                    }`}>
+                                        {msg.content}
+                                    </div>
+                                </div>
+                            ))}
+                            {loading && (
+                                <div class="flex justify-start">
+                                    <div class="bg-white border border-slate-100 p-4 rounded-2xl rounded-tl-none shadow-sm flex gap-2">
+                                        <div class="w-2 h-2 bg-slate-300 rounded-full animate-bounce"></div>
+                                        <div class="w-2 h-2 bg-slate-300 rounded-full animate-bounce [animation-delay:-.3s]"></div>
+                                        <div class="w-2 h-2 bg-slate-300 rounded-full animate-bounce [animation-delay:-.5s]"></div>
+                                    </div>
+                                </div>
+                            )}
+                            <div ref={chatEndRef} />
+                        </div>
+
+                        <form onSubmit={onSend} class="p-4 bg-white border-t border-slate-200 flex gap-2">
+                            <input 
+                                type="text" 
+                                value={input}
+                                onChange={(e) => setInput(e.target.value)}
+                                placeholder="Ask Loshbot anything..."
+                                class="flex-1 bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-medium"
+                            />
+                            <button 
+                                type="submit"
+                                disabled={loading || !input.trim()}
+                                class="bg-indigo-600 disabled:bg-slate-200 text-white w-14 h-14 rounded-2xl flex items-center justify-center transition-all shadow-lg hover:shadow-indigo-100 active:scale-95"
+                            >
+                                <i class="fas fa-paper-plane text-lg"></i>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
