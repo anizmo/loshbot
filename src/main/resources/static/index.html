@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Loshbot AI - Business Platform</title>
+    <title>AI Business Platform</title>
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -11,344 +11,476 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
         .glass { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); }
-        .chat-container { height: calc(100vh - 300px); min-height: 400px; }
+        .chat-container { height: calc(100vh - 250px); min-height: 400px; }
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
-        .fade-in { animation: fadeIn 0.3s ease-in-out; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .fade-in { animation: fadeIn 0.2s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
     </style>
 </head>
 <body class="bg-slate-50 font-sans text-slate-900">
-    <div id="root"></div>
+    <div id="root">
+        <div class="flex items-center justify-center h-screen flex-col gap-4">
+            <i class="fas fa-robot fa-spin text-4xl text-indigo-600"></i>
+            <p class="text-slate-500 font-medium animate-pulse">Initializing Platform...</p>
+        </div>
+    </div>
 
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
 
-        function App() {
+        // --- SHARED COMPONENTS ---
+        function ChatWindow({ messages, input, setInput, onSend, loading, readOnly = false, title = "AI Session" }) {
+            const chatEndRef = useRef(null);
+            useEffect(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth" }), [messages, loading]);
+
+            return (
+                <div className="glass rounded-2xl shadow-xl border border-slate-200 overflow-hidden flex flex-col h-full">
+                    <div className="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+                        <span className="text-sm font-bold text-slate-500 uppercase tracking-wider">{title}</span>
+                        {readOnly && <span className="bg-amber-100 text-amber-700 text-[10px] font-bold px-2 py-0.5 rounded-full">READ ONLY</span>}
+                    </div>
+                    
+                    <div className="chat-container overflow-y-auto p-6 space-y-4 bg-white/50 flex-1">
+                        {messages.length === 0 && <div className="text-center text-slate-300 mt-20 italic">No messages to display.</div>}
+                        {messages.map((msg, i) => (
+                            <div key={i} className={`flex ${msg.role === 'USER' ? 'justify-end' : 'justify-start'}`}>
+                                <div className={`max-w-[85%] p-4 rounded-2xl shadow-sm ${
+                                    msg.role === 'USER' ? 'bg-indigo-600 text-white rounded-tr-none' 
+                                    : msg.role === 'SYSTEM' ? (msg.content.includes('⚠️') ? 'bg-rose-50 text-rose-700 border border-rose-100 text-xs font-bold text-center w-full shadow-none' : 'bg-slate-100 text-slate-500 text-xs font-bold text-center w-full shadow-none')
+                                    : 'bg-white border border-slate-100 text-slate-800 rounded-tl-none'
+                                }`}>
+                                    {msg.content}
+                                </div>
+                            </div>
+                        ))}
+                        {loading && (
+                            <div className="flex justify-start">
+                                <div className="bg-white border border-slate-100 p-4 rounded-2xl rounded-tl-none shadow-sm flex gap-2">
+                                    <div className="w-2 h-2 bg-slate-300 rounded-full animate-bounce"></div>
+                                    <div className="w-2 h-2 bg-slate-300 rounded-full animate-bounce [animation-delay:-.3s]"></div>
+                                    <div className="w-2 h-2 bg-slate-300 rounded-full animate-bounce [animation-delay:-.5s]"></div>
+                                </div>
+                            </div>
+                        )}
+                        <div ref={chatEndRef} />
+                    </div>
+
+                    {!readOnly && (
+                        <form onSubmit={onSend} className="p-4 bg-white border-t border-slate-200 flex gap-2">
+                            <input type="text" value={input} onChange={(e) => setInput(e.target.value)}
+                                placeholder="Type your message..."
+                                className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-5 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                            />
+                            <button type="submit" disabled={loading || !input.trim()}
+                                className="bg-indigo-600 disabled:bg-slate-200 text-white w-12 h-12 rounded-xl flex items-center justify-center transition-all shadow-lg active:scale-95">
+                                <i className="fas fa-paper-plane"></i>
+                            </button>
+                        </form>
+                    )}
+                </div>
+            );
+        }
+
+        // --- ADMIN APP ---
+        function AdminApp({ botName }) {
             const [view, setView] = useState('LOADING');
             const [user, setUser] = useState(null);
-            const [conversations, setConversations] = useState([]);
-            const [activeConvId, setActiveConvId] = useState(null);
-            const [messages, setMessages] = useState([]);
-            const [input, setInput] = useState("");
-            const [loading, setLoading] = useState(false);
+            const [tab, setTab] = useState('KNOWLEDGE');
+            const [visitors, setVisitors] = useState([]);
+            const [selectedVisitor, setSelectedVisitor] = useState(null);
+            const [visitorConvs, setVisitorConvs] = useState([]);
+            const [selectedConv, setSelectedConv] = useState(null);
+            const [convMessages, setConvMessages] = useState([]);
             const [uploading, setUploading] = useState(false);
-            const chatEndRef = useRef(null);
 
             useEffect(() => {
-                const savedUser = localStorage.getItem('loshbot_user');
-                if (savedUser) {
-                    const parsedUser = JSON.parse(savedUser);
-                    setUser(parsedUser);
-                    fetchConversations(parsedUser.id);
-                    setView('DASHBOARD');
+                const saved = localStorage.getItem('loshbot_admin');
+                if (saved) {
+                    try {
+                        const parsed = JSON.parse(saved);
+                        setUser(parsed);
+                        setView('DASHBOARD');
+                    } catch(e) { setView('ONBOARDING'); }
                 } else {
                     setView('ONBOARDING');
                 }
             }, []);
 
-            const fetchConversations = async (userId) => {
-                try {
-                    const res = await fetch(`/user/${userId}/conversations`);
-                    const data = await res.json();
-                    setConversations(data);
-                } catch (err) { console.error("Failed to fetch conversations", err); }
-            };
-
-            const handleOnboard = async (userData) => {
+            const handleOnboard = async (data) => {
                 try {
                     const res = await fetch('/user/onboard', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(userData)
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(data)
                     });
-                    const newUser = await res.json();
-                    setUser(newUser);
-                    localStorage.setItem('loshbot_user', JSON.stringify(newUser));
+                    const admin = await res.json();
+                    setUser(admin);
+                    localStorage.setItem('loshbot_admin', JSON.stringify(admin));
                     setView('DASHBOARD');
-                } catch (err) { alert("Onboarding failed"); }
+                } catch (err) { alert("Onboarding failed."); }
             };
 
-            const startNewChat = async () => {
+            const fetchVisitors = async () => {
                 try {
-                    const res = await fetch(`/chat/create?userId=${user.id}`, { 
-                        method: 'POST',
-                        body: 'New Conversation'
-                    });
-                    const id = (await res.text()).replace(/"/g, '');
-                    setActiveConvId(id);
-                    setMessages([{ role: 'SYSTEM', content: `Hello ${user.name}! I'm ready to help with your ${user.industry} business.` }]);
-                    setView('CHAT');
-                    fetchConversations(user.id);
-                } catch (err) { console.error(err); }
+                    const res = await fetch('/admin/visitors');
+                    setVisitors(await res.json());
+                } catch (e) {}
             };
 
-            const openConversation = async (conv) => {
-                setActiveConvId(conv.id);
-                // In a real app, we'd fetch messages here. For now, we'll just start fresh or show a placeholder.
-                setMessages([{ role: 'SYSTEM', content: `Resuming: ${conv.title}` }]);
-                setView('CHAT');
-            };
+            useEffect(() => { if (tab === 'CHATS' && view === 'DASHBOARD') fetchVisitors(); }, [tab, view]);
 
-            const sendMessage = async (e) => {
-                e.preventDefault();
-                if (!input.trim() || loading) return;
-                const userMsg = input;
-                setInput("");
-                setMessages(prev => [...prev, { role: 'USER', content: userMsg }]);
-                setLoading(true);
+            const selectVisitor = async (v) => {
+                setSelectedVisitor(v);
+                setSelectedConv(null);
+                setConvMessages([]);
                 try {
-                    const res = await fetch(`/chat/${activeConvId}`, { method: 'POST', body: userMsg });
-                    const aiResponse = await res.text();
-                    setMessages(prev => [...prev, { role: 'ASSISTANT', content: aiResponse }]);
-                } catch (err) { setMessages(prev => [...prev, { role: 'SYSTEM', content: 'Connection Error.' }]); }
-                finally { setLoading(false); }
+                    const res = await fetch(`/admin/visitors/${v.id}/conversations`);
+                    setVisitorConvs(await res.json());
+                } catch (e) {}
             };
 
-            const handleFileUpload = async (e) => {
-                const file = e.target.files[0];
-                if (!file) return;
-                const formData = new FormData();
-                formData.append('file', file);
-                setUploading(true);
+            const selectConv = async (c) => {
+                setSelectedConv(c);
                 try {
-                    await fetch('/knowledge/upload', { method: 'POST', body: formData });
-                    alert("Knowledge Base Updated!");
-                } catch (err) { alert("Upload failed"); }
-                finally { setUploading(false); }
+                    const res = await fetch(`/admin/conversations/${c.id}/messages`);
+                    setConvMessages(await res.json());
+                } catch (e) {}
             };
 
-            if (view === 'LOADING') return <div class="flex items-center justify-center h-screen"><i class="fas fa-spinner fa-spin text-4xl text-indigo-600"></i></div>;
+            if (view === 'LOADING') return (
+                <div className="flex items-center justify-center h-screen flex-col gap-4">
+                    <i className="fas fa-spinner fa-spin text-4xl text-indigo-600"></i>
+                    <p className="text-slate-500 font-medium">Loading Dashboard...</p>
+                </div>
+            );
+
+            if (view === 'ONBOARDING') return <AdminOnboarding onSubmit={handleOnboard} botName={botName} />;
 
             return (
-                <div class="min-h-screen pb-12">
-                    <nav class="bg-white border-b border-slate-200 mb-8 sticky top-0 z-10 shadow-sm">
-                        <div class="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
-                            <div class="flex items-center gap-2 cursor-pointer" onClick={() => user && setView('DASHBOARD')}>
-                                <div class="bg-indigo-600 w-8 h-8 rounded-lg flex items-center justify-center shadow-md shadow-indigo-200">
-                                    <i class="fas fa-robot text-white text-sm"></i>
-                                </div>
-                                <span class="font-bold text-xl tracking-tight">Loshbot</span>
-                            </div>
-                            {user && (
-                                <div class="flex items-center gap-4 text-sm font-medium">
-                                    <span class="text-slate-500 bg-slate-100 px-3 py-1 rounded-full">{user.company}</span>
-                                    <div class="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center border border-indigo-200">
-                                        {user.name[0]}
-                                    </div>
-                                </div>
-                            )}
+                <div className="flex flex-col min-h-screen fade-in">
+                    <nav className="bg-white border-b border-slate-200 h-16 flex items-center px-6 justify-between sticky top-0 z-20">
+                        <div className="flex items-center gap-2">
+                            <div className="bg-indigo-600 p-1.5 rounded-lg text-white shadow-md"><i className="fas fa-robot text-xs"></i></div>
+                            <span className="font-bold text-lg">{botName} <span className="text-slate-400 font-medium">Admin</span></span>
                         </div>
+                        <div className="flex gap-6 text-sm font-bold text-slate-500">
+                            {['KNOWLEDGE', 'SETTINGS', 'CHATS', 'DEPLOY'].map(t => (
+                                <button key={t} onClick={() => setTab(t)} 
+                                    className={`transition-colors hover:text-indigo-600 ${tab === t ? 'text-indigo-600 border-b-2 border-indigo-600' : ''}`}>
+                                    {t}
+                                </button>
+                            ))}
+                        </div>
+                        <div className="text-xs font-bold text-slate-400 bg-slate-100 px-3 py-1 rounded-full">{user?.company}</div>
                     </nav>
 
-                    <main class="max-w-5xl mx-auto px-4">
-                        {view === 'ONBOARDING' && <OnboardingView onSubmit={handleOnboard} />}
-                        {view === 'DASHBOARD' && (
-                            <DashboardView 
-                                user={user} 
-                                conversations={conversations} 
-                                onNewChat={startNewChat}
-                                onOpenConv={openConversation}
-                                onUpload={handleFileUpload}
-                                uploading={uploading}
-                            />
+                    <main className="flex-1 p-8 max-w-7xl mx-auto w-full">
+                        {tab === 'SETTINGS' && <AdminSettings />}
+                        {tab === 'KNOWLEDGE' && (
+                            <div className="fade-in space-y-6">
+                                <h2 className="text-3xl font-bold">Knowledge Base</h2>
+                                <p className="text-slate-500">Upload documents to train your chatbot on your business context.</p>
+                                <div className="bg-white border-2 border-dashed border-slate-200 rounded-3xl p-12 text-center flex flex-col items-center">
+                                    <i className="fas fa-cloud-upload-alt text-4xl text-slate-300 mb-4"></i>
+                                    <label className="cursor-pointer bg-indigo-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-lg">
+                                        {uploading ? 'Processing...' : 'Upload PDF'}
+                                        <input type="file" className="hidden" accept=".pdf" disabled={uploading} onChange={async (e) => {
+                                            const file = e.target.files[0]; if (!file) return;
+                                            const fd = new FormData(); fd.append('file', file);
+                                            setUploading(true);
+                                            try { await fetch('/knowledge/upload', { method: 'POST', body: fd }); alert("Processed!"); } 
+                                            catch(e) { alert("Failed to upload."); }
+                                            finally { setUploading(false); }
+                                        }} />
+                                    </label>
+                                </div>
+                            </div>
                         )}
-                        {view === 'CHAT' && (
-                            <ChatView 
-                                messages={messages} 
-                                input={input} 
-                                setInput={setInput} 
-                                onSend={sendMessage} 
-                                loading={loading} 
-                                onBack={() => { setView('DASHBOARD'); fetchConversations(user.id); }}
-                            />
+
+                        {tab === 'DEPLOY' && (
+                            <div className="fade-in space-y-6">
+                                <h2 className="text-3xl font-bold">Deployment</h2>
+                                <div className="bg-white border border-slate-200 p-8 rounded-3xl space-y-4">
+                                    <p className="font-medium">Your chatbot is ready to be shared with your visitors.</p>
+                                    <div className="bg-slate-50 p-4 rounded-xl font-mono text-sm border border-slate-200 text-indigo-600 break-all">
+                                        {window.location.origin}/?mode=chat
+                                    </div>
+                                    <a href="?mode=chat" target="_blank" className="inline-flex items-center gap-2 bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold shadow-lg">
+                                        Open Chatbot in New Tab <i className="fas fa-external-link-alt text-xs"></i>
+                                    </a>
+                                </div>
+                            </div>
+                        )}
+
+                        {tab === 'CHATS' && (
+                            <div className="fade-in grid grid-cols-12 gap-6 h-[calc(100vh-250px)]">
+                                <div className="col-span-3 bg-white border border-slate-200 rounded-2xl overflow-y-auto">
+                                    <div className="p-4 border-b border-slate-100 font-bold text-xs text-slate-400 uppercase tracking-widest text-center">Visitors</div>
+                                    {visitors.map(v => (
+                                        <div key={v.id} onClick={() => selectVisitor(v)} 
+                                            className={`p-4 cursor-pointer hover:bg-slate-50 border-l-4 transition-all ${selectedVisitor?.id === v.id ? 'bg-indigo-50 border-indigo-500' : 'border-transparent'}`}>
+                                            <div className="font-bold text-sm">{v.name}</div>
+                                            <div className="text-[10px] text-slate-400">{v.email}</div>
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="col-span-3 bg-white border border-slate-200 rounded-2xl overflow-y-auto">
+                                    <div className="p-4 border-b border-slate-100 font-bold text-xs text-slate-400 uppercase tracking-widest text-center">Sessions</div>
+                                    {visitorConvs.map(c => (
+                                        <div key={c.id} onClick={() => selectConv(c)}
+                                            className={`p-4 cursor-pointer hover:bg-slate-50 border-l-4 transition-all ${selectedConv?.id === c.id ? 'bg-slate-100 border-slate-400' : 'border-transparent'}`}>
+                                            <div className="font-bold text-xs">{c.title}</div>
+                                            <div className="text-[9px] text-slate-400">{new Date(c.createdAt).toLocaleString()}</div>
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="col-span-6">
+                                    <ChatWindow messages={convMessages} readOnly title={selectedConv ? `Review: ${selectedConv.title}` : 'Select a session'} />
+                                </div>
+                            </div>
                         )}
                     </main>
                 </div>
             );
         }
 
-        function OnboardingView({ onSubmit }) {
-            const [formData, setFormData] = useState({ name: '', company: '', industry: '' });
-            return (
-                <div class="max-w-md mx-auto fade-in mt-12">
-                    <div class="glass p-8 rounded-3xl shadow-xl border border-slate-200">
-                        <h2 class="text-2xl font-bold mb-2">Welcome to Loshbot</h2>
-                        <p class="text-slate-500 mb-8">Let's set up your business profile to get started.</p>
-                        <div class="space-y-4">
-                            <div>
-                                <label class="block text-sm font-semibold mb-1 ml-1">Your Name</label>
-                                <input class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all" 
-                                    placeholder="e.g. John Doe" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
-                            </div>
-                            <div>
-                                <label class="block text-sm font-semibold mb-1 ml-1">Company Name</label>
-                                <input class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all" 
-                                    placeholder="e.g. Acme Corp" value={formData.company} onChange={e => setFormData({...formData, company: e.target.value})} />
-                            </div>
-                            <div>
-                                <label class="block text-sm font-semibold mb-1 ml-1">Industry</label>
-                                <select class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                                    value={formData.industry} onChange={e => setFormData({...formData, industry: e.target.value})}>
-                                    <option value="">Select Industry</option>
-                                    <option value="Tech">Technology</option>
-                                    <option value="Retail">Retail</option>
-                                    <option value="Finance">Finance</option>
-                                    <option value="Healthcare">Healthcare</option>
-                                </select>
-                            </div>
-                            <button 
-                                onClick={() => formData.name && formData.company && formData.industry && onSubmit(formData)}
-                                class="w-full bg-indigo-600 text-white py-4 rounded-xl font-bold mt-4 shadow-lg shadow-indigo-100 hover:bg-indigo-700 active:scale-95 transition-all"
-                            >
-                                Start My Journey
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            );
-        }
+        function AdminSettings() {
+            const [config, setConfig] = useState({ provider: 'ollama', apiKey: '', botName: '' });
+            const [status, setStatus] = useState(null);
+            const [loading, setLoading] = useState(true);
 
-        function DashboardView({ user, conversations, onNewChat, onOpenConv, onUpload, uploading }) {
-            return (
-                <div class="fade-in space-y-8">
-                    <div class="flex flex-col md:flex-row md:items-end justify-between gap-4">
-                        <div>
-                            <h2 class="text-3xl font-bold">Hello, {user.name} 👋</h2>
-                            <p class="text-slate-500">Welcome back to your {user.industry} assistant dashboard.</p>
-                        </div>
-                        <div class="flex gap-2">
-                            <label class="cursor-pointer bg-white border border-slate-200 hover:bg-slate-50 px-4 py-2 rounded-xl transition-all flex items-center gap-2 shadow-sm text-sm font-semibold">
-                                <i class={`fas ${uploading ? 'fa-spinner fa-spin' : 'fa-file-upload text-indigo-500'}`}></i>
-                                {uploading ? 'Processing...' : 'Knowledge Base'}
-                                <input type="file" class="hidden" onChange={onUpload} accept=".pdf" disabled={uploading} />
-                            </label>
-                            <button onClick={onNewChat} class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-xl font-bold shadow-lg shadow-indigo-100 flex items-center gap-2 transition-all">
-                                <i class="fas fa-plus"></i> New Chat
-                            </button>
-                        </div>
-                    </div>
+            useEffect(() => {
+                fetch('/admin/config').then(r => r.json()).then(data => {
+                    setConfig(data);
+                    setLoading(false);
+                });
+            }, []);
 
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
-                        <div class="md:col-span-2 space-y-4">
-                            <h3 class="text-lg font-bold flex items-center gap-2 ml-1">
-                                <i class="fas fa-history text-slate-400"></i> Recent Sessions
-                            </h3>
-                            {conversations.length === 0 ? (
-                                <div class="bg-white p-12 rounded-3xl border border-slate-200 text-center space-y-3">
-                                    <i class="fas fa-comment-slash text-4xl text-slate-200"></i>
-                                    <p class="text-slate-500 font-medium">No sessions yet. Start your first chat!</p>
-                                </div>
-                            ) : (
-                                <div class="grid gap-3">
-                                    {conversations.map(conv => (
-                                        <div key={conv.id} onClick={() => onOpenConv(conv)} class="bg-white p-4 rounded-2xl border border-slate-200 hover:border-indigo-400 hover:shadow-md cursor-pointer transition-all flex items-center justify-between group">
-                                            <div class="flex items-center gap-4">
-                                                <div class="bg-slate-100 w-10 h-10 rounded-xl flex items-center justify-center group-hover:bg-indigo-50 transition-colors">
-                                                    <i class="fas fa-comments text-slate-400 group-hover:text-indigo-500"></i>
-                                                </div>
-                                                <div>
-                                                    <div class="font-bold">{conv.title}</div>
-                                                    <div class="text-xs text-slate-400">{new Date(conv.createdAt).toLocaleString()}</div>
-                                                </div>
-                                            </div>
-                                            <i class="fas fa-chevron-right text-slate-300 group-hover:text-indigo-400 transition-colors"></i>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-                        <div class="space-y-4">
-                            <h3 class="text-lg font-bold ml-1">Business Context</h3>
-                            <div class="bg-white p-6 rounded-3xl border border-slate-200 space-y-4">
-                                <div class="space-y-1">
-                                    <div class="text-xs font-bold text-slate-400 uppercase tracking-wider">Company</div>
-                                    <div class="font-bold text-lg">{user.company}</div>
-                                </div>
-                                <div class="space-y-1">
-                                    <div class="text-xs font-bold text-slate-400 uppercase tracking-wider">Industry</div>
-                                    <div class="font-bold text-lg">{user.industry}</div>
-                                </div>
-                                <div class="pt-4 border-t border-slate-100 flex gap-4">
-                                    <div class="text-center flex-1">
-                                        <div class="text-xl font-bold text-indigo-600">{conversations.length}</div>
-                                        <div class="text-[10px] font-bold text-slate-400 uppercase">Sessions</div>
-                                    </div>
-                                    <div class="text-center flex-1">
-                                        <div class="text-xl font-bold text-indigo-600">Active</div>
-                                        <div class="text-[10px] font-bold text-slate-400 uppercase">Status</div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            );
-        }
+            const handleSave = async () => {
+                const res = await fetch('/admin/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(config)
+                });
+                const msg = await res.text();
+                setStatus({ type: 'success', msg });
+            };
 
-        function ChatView({ messages, input, setInput, onSend, loading, onBack }) {
-            const chatEndRef = useRef(null);
-            useEffect(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth" }), [messages]);
+            if (loading) return <div className="text-center py-20 animate-pulse text-slate-400 font-bold uppercase tracking-widest">Loading Configuration...</div>;
 
             return (
-                <div class="fade-in max-w-4xl mx-auto">
-                    <div class="glass rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col">
-                        <div class="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
-                            <button onClick={onBack} class="text-slate-500 hover:text-indigo-600 font-bold flex items-center gap-2 transition-all">
-                                <i class="fas fa-arrow-left"></i> Dashboard
-                            </button>
-                            <span class="text-sm font-bold text-slate-400">Live AI Session</span>
-                        </div>
-                        
-                        <div class="chat-container overflow-y-auto p-6 space-y-4 bg-white/50">
-                            {messages.map((msg, i) => (
-                                <div key={i} class={`flex ${msg.role === 'USER' ? 'justify-end' : 'justify-start'}`}>
-                                    <div class={`max-w-[85%] p-4 rounded-2xl shadow-sm ${
-                                        msg.role === 'USER' 
-                                        ? 'bg-indigo-600 text-white rounded-tr-none' 
-                                        : msg.role === 'SYSTEM' 
-                                        ? 'bg-slate-100 text-slate-500 text-xs font-bold text-center w-full shadow-none border-none'
-                                        : 'bg-white border border-slate-100 text-slate-800 rounded-tl-none'
-                                    }`}>
-                                        {msg.content}
-                                    </div>
-                                </div>
-                            ))}
-                            {loading && (
-                                <div class="flex justify-start">
-                                    <div class="bg-white border border-slate-100 p-4 rounded-2xl rounded-tl-none shadow-sm flex gap-2">
-                                        <div class="w-2 h-2 bg-slate-300 rounded-full animate-bounce"></div>
-                                        <div class="w-2 h-2 bg-slate-300 rounded-full animate-bounce [animation-delay:-.3s]"></div>
-                                        <div class="w-2 h-2 bg-slate-300 rounded-full animate-bounce [animation-delay:-.5s]"></div>
-                                    </div>
-                                </div>
-                            )}
-                            <div ref={chatEndRef} />
-                        </div>
-
-                        <form onSubmit={onSend} class="p-4 bg-white border-t border-slate-200 flex gap-2">
+                <div className="fade-in space-y-8 max-w-2xl">
+                    <h2 className="text-3xl font-bold">Platform Configuration</h2>
+                    <p className="text-slate-500">Customize your chatbot's identity and AI infrastructure.</p>
+                    
+                    <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm space-y-6">
+                        <div className="space-y-2">
+                            <label className="text-sm font-bold text-slate-700 ml-1">Chatbot Name</label>
                             <input 
-                                type="text" 
-                                value={input}
-                                onChange={(e) => setInput(e.target.value)}
-                                placeholder="Ask Loshbot anything..."
-                                class="flex-1 bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-medium"
+                                type="text"
+                                value={config.botName} 
+                                onChange={e => setConfig({...config, botName: e.target.value})}
+                                placeholder="e.g. AcmeSupport"
+                                className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none"
                             />
-                            <button 
-                                type="submit"
-                                disabled={loading || !input.trim()}
-                                class="bg-indigo-600 disabled:bg-slate-200 text-white w-14 h-14 rounded-2xl flex items-center justify-center transition-all shadow-lg hover:shadow-indigo-100 active:scale-95"
+                            <p className="text-[10px] text-slate-400 italic ml-1">The name visitors will see when interacting with your bot.</p>
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="text-sm font-bold text-slate-700 ml-1">AI Provider</label>
+                            <select 
+                                value={config.provider} 
+                                onChange={e => setConfig({...config, provider: e.target.value})}
+                                className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none"
                             >
-                                <i class="fas fa-paper-plane text-lg"></i>
-                            </button>
-                        </form>
+                                <option value="ollama">Local LLM (Ollama)</option>
+                                <option value="openai">Cloud LLM (OpenAI)</option>
+                            </select>
+                        </div>
+
+                        {config.provider === 'openai' && (
+                            <div className="space-y-2 fade-in">
+                                <label className="text-sm font-bold text-slate-700 ml-1">OpenAI API Key</label>
+                                <input 
+                                    type="password"
+                                    value={config.apiKey} 
+                                    onChange={e => setConfig({...config, apiKey: e.target.value})}
+                                    placeholder="sk-..."
+                                    className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none font-mono"
+                                />
+                            </div>
+                        )}
+
+                        <button 
+                            onClick={handleSave}
+                            className="w-full bg-indigo-600 text-white py-4 rounded-xl font-bold shadow-lg hover:bg-indigo-700 active:scale-95 transition-all"
+                        >
+                            Save All Configuration
+                        </button>
+                    </div>
+
+                    {status && (
+                        <div className={`p-6 rounded-2xl border flex gap-4 fade-in ${status.type === 'success' ? 'bg-emerald-50 border-emerald-100 text-emerald-800' : 'bg-rose-50 border-rose-100 text-rose-800'}`}>
+                            <i className="fas fa-info-circle mt-1"></i>
+                            <div className="space-y-1">
+                                <div className="font-bold">Settings Updated</div>
+                                <div className="text-sm">{status.msg}</div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        function AdminOnboarding({ onSubmit, botName }) {
+            const [form, setForm] = useState({ name: '', company: '', industry: '' });
+            return (
+                <div className="max-w-md mx-auto mt-20 fade-in p-8 glass rounded-3xl shadow-2xl border border-slate-200">
+                    <h2 className="text-2xl font-bold mb-1">Welcome to {botName}</h2>
+                    <p className="text-slate-500 mb-8 text-sm">Create your admin profile to manage your AI.</p>
+                    <div className="space-y-4">
+                        <input className="w-full px-4 py-3 rounded-xl border border-slate-200" placeholder="Your Name" 
+                            value={form.name} onChange={e => setForm({...form, name: e.target.value})} />
+                        <input className="w-full px-4 py-3 rounded-xl border border-slate-200" placeholder="Company Name"
+                            value={form.company} onChange={e => setForm({...form, company: e.target.value})} />
+                        <select className="w-full px-4 py-3 rounded-xl border border-slate-200" 
+                            value={form.industry} onChange={e => setForm({...form, industry: e.target.value})}>
+                            <option value="">Industry</option>
+                            <option value="Tech">Tech</option><option value="Retail">Retail</option><option value="Finance">Finance</option>
+                        </select>
+                        <button onClick={() => onSubmit(form)} className="w-full bg-indigo-600 text-white py-4 rounded-xl font-bold shadow-lg hover:bg-indigo-700 transition-all">Start Admin Dashboard</button>
                     </div>
                 </div>
             );
         }
 
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
+        // --- VISITOR APP ---
+        function VisitorApp({ botName }) {
+            const [view, setView] = useState('LOADING');
+            const [user, setUser] = useState(null);
+            const [messages, setMessages] = useState([]);
+            const [input, setInput] = useState("");
+            const [loading, setLoading] = useState(false);
+            const [convId, setConvId] = useState(null);
+            const [visitorForm, setVisitorForm] = useState({ name: '', email: '' });
+
+            useEffect(() => {
+                const saved = localStorage.getItem('loshbot_visitor');
+                if (saved) {
+                    try {
+                        const parsed = JSON.parse(saved);
+                        setUser(parsed);
+                        setView('CHAT');
+                        initializeChat(parsed.id);
+                    } catch(e) { setView('ONBOARDING'); }
+                } else {
+                    setView('ONBOARDING');
+                }
+            }, []);
+
+            const initializeChat = async (userId) => {
+                try {
+                    const res = await fetch(`/chat/create?userId=${userId}`, { method: 'POST', body: 'Web Session' });
+                    const id = (await res.text()).replace(/"/g, '');
+                    setConvId(id);
+                    setMessages([{ role: 'SYSTEM', content: `Connected to ${botName}. How can I help you today?` }]);
+                } catch (e) {
+                    setMessages([{ role: 'SYSTEM', content: '⚠️ Connecting failed. Please check if the server is running.' }]);
+                }
+            };
+
+            const handleOnboard = async () => {
+                if (!visitorForm.name || !visitorForm.email) return;
+                try {
+                    const res = await fetch('/user/visitor', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(visitorForm)
+                    });
+                    const visitor = await res.json();
+                    setUser(visitor);
+                    localStorage.setItem('loshbot_visitor', JSON.stringify(visitor));
+                    setView('CHAT');
+                    initializeChat(visitor.id);
+                } catch (err) { alert("Failed to start chat."); }
+            };
+
+            const onSend = async (e) => {
+                e.preventDefault();
+                if (!input.trim() || loading || !convId) return;
+                
+                const userMsg = input; 
+                setInput(""); 
+                // Optimistic UI Update: Show user message immediately
+                setMessages(prev => [...prev, { role: 'USER', content: userMsg }]);
+                setLoading(true);
+                
+                try {
+                    const res = await fetch(`/chat/${convId}`, { method: 'POST', body: userMsg });
+                    const data = await res.json();
+                    
+                    if (data.success) {
+                        setMessages(prev => [...prev, { role: 'ASSISTANT', content: data.content }]);
+                    } else {
+                        setMessages(prev => [...prev, { role: 'SYSTEM', content: `⚠️ ${data.error}` }]);
+                    }
+                } catch(e) {
+                    setMessages(prev => [...prev, { role: 'SYSTEM', content: '⚠️ Connection failed. Is the server running?' }]);
+                } finally { setLoading(false); }
+            };
+
+            if (view === 'LOADING') return (
+                <div className="flex items-center justify-center h-screen flex-col gap-4">
+                    <i className="fas fa-spinner fa-spin text-4xl text-indigo-600"></i>
+                    <p className="text-slate-500 font-medium">Connecting to {botName}...</p>
+                </div>
+            );
+
+            if (view === 'ONBOARDING') return (
+                <div className="max-w-md mx-auto mt-20 fade-in p-8 glass rounded-3xl shadow-xl border border-slate-200">
+                    <h2 className="text-xl font-bold mb-6 text-center text-slate-800">Chat with {botName}</h2>
+                    <div className="space-y-4">
+                        <input className="w-full px-4 py-3 rounded-xl border border-slate-200" placeholder="Your Name" 
+                            value={visitorForm.name} onChange={e => setVisitorForm({...visitorForm, name: e.target.value})} />
+                        <input className="w-full px-4 py-3 rounded-xl border border-slate-200" placeholder="Your Email" 
+                            value={visitorForm.email} onChange={e => setVisitorForm({...visitorForm, email: e.target.value})} />
+                        <button onClick={handleOnboard} className="w-full bg-indigo-600 text-white py-4 rounded-xl font-bold shadow-lg hover:bg-indigo-700 transition-all">Start Chat</button>
+                    </div>
+                </div>
+            );
+
+            return (
+                <div className="max-w-4xl mx-auto p-4 md:p-12 h-screen flex flex-col fade-in">
+                    <ChatWindow messages={messages} input={input} setInput={setInput} onSend={onSend} loading={loading} title={`${botName} Live`} />
+                </div>
+            );
+        }
+
+        // --- ROOT COMPONENT ---
+        function App() {
+            const [mode, setMode] = useState(null);
+            const [botName, setBotName] = useState('Loshbot');
+            
+            useEffect(() => {
+                const isVisitor = new URLSearchParams(window.location.search).get('mode') === 'chat';
+                setMode(isVisitor ? 'chat' : 'admin');
+                
+                // Fetch dynamic bot name
+                fetch('/chat/info')
+                    .then(r => r.json())
+                    .then(data => setBotName(data.name || 'Loshbot'))
+                    .catch(() => setBotName('Loshbot'));
+            }, []);
+
+            if (!mode) return null;
+            return mode === 'chat' ? <VisitorApp botName={botName} /> : <AdminApp botName={botName} />;
+        }
+
+        try {
+            const root = ReactDOM.createRoot(document.getElementById('root'));
+            root.render(<App />);
+        } catch (err) {
+            console.error("Mounting Error:", err);
+        }
     </script>
 </body>
 </html>

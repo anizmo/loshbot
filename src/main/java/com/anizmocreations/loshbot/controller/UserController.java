@@ -3,6 +3,7 @@ package com.anizmocreations.loshbot.controller;
 import com.anizmocreations.loshbot.conversation.ConversationManager;
 import com.anizmocreations.loshbot.entity.Conversation;
 import com.anizmocreations.loshbot.entity.User;
+import com.anizmocreations.loshbot.entity.UserRole;
 import com.anizmocreations.loshbot.repo.UserRepository;
 import org.springframework.web.bind.annotation.*;
 
@@ -26,8 +27,23 @@ public class UserController {
         User user = new User(
                 UUID.randomUUID(),
                 request.name(),
+                null,
                 request.company(),
-                request.industry()
+                request.industry(),
+                UserRole.ADMIN
+        );
+        return userRepository.save(user);
+    }
+
+    @PostMapping("/visitor")
+    public User registerVisitor(@RequestBody VisitorRequest request) {
+        User user = new User(
+                UUID.randomUUID(),
+                request.name(),
+                request.email(),
+                null,
+                null,
+                UserRole.VISITOR
         );
         return userRepository.save(user);
     }
@@ -43,4 +59,5 @@ public class UserController {
     }
 
     public record UserRequest(String name, String company, String industry) {}
+    public record VisitorRequest(String name, String email) {}
 }

@@ -5,19 +5,33 @@ import org.springframework.ai.reader.ExtractedTextFormatter;
 import org.springframework.ai.reader.pdf.PagePdfDocumentReader;
 import org.springframework.ai.reader.pdf.config.PdfDocumentReaderConfig;
 import org.springframework.ai.transformer.splitter.TokenTextSplitter;
-import org.springframework.ai.vectorstore.VectorStore;
+import org.springframework.ai.vectorstore.SimpleVectorStore;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
 
+import java.io.File;
 import java.util.List;
 
 @Service
 public class KnowledgeBaseManager {
 
-    private final VectorStore vectorStore;
+    private final SimpleVectorStore vectorStore;
+    private static final String STORE_PATH = "vector_store.json";
 
-    public KnowledgeBaseManager(VectorStore vectorStore) {
+    public KnowledgeBaseManager(SimpleVectorStore vectorStore) {
         this.vectorStore = vectorStore;
+        loadStore();
+    }
+
+    private void loadStore() {
+        File file = new File(STORE_PATH);
+        if (file.exists()) {
+            vectorStore.load(file);
+        }
+    }
+
+    private void saveStore() {
+        vectorStore.save(new File(STORE_PATH));
     }
 
     public void addPdfDocument(Resource pdfResource) {
@@ -39,6 +53,9 @@ public class KnowledgeBaseManager {
 
         // Store into Vector Database
         vectorStore.add(splitDocuments);
+        
+        // Persist to disk
+        saveStore();
     }
     
     public List<Document> search(String query) {

@@ -1,5 +1,6 @@
 package com.anizmocreations.loshbot.controller;
 
+import com.anizmocreations.loshbot.aimodel.SettingsManager;
 import com.anizmocreations.loshbot.conversation.ConversationManager;
 import com.anizmocreations.loshbot.engine.ChatEngine;
 import com.anizmocreations.loshbot.persona.Persona;
@@ -13,19 +14,17 @@ public class ChatController {
 
     private final ChatEngine chatEngine;
     private final ConversationManager conversationManager;
+    private final SettingsManager settingsManager;
 
-    // A default persona for the chatbot. This can be externalized later.
-    private final Persona defaultPersona = new Persona(
-            "loshbot",
-            "You are Loshbot, an AI business assistant. You are running locally on the user's machine. " +
-            "You were created by the Loshbot Open Source project. " +
-            "Provide direct, natural, and helpful answers. " +
-            "DO NOT include internal reasoning. Only output the final response."
-    );
-
-    public ChatController(ChatEngine chatEngine, ConversationManager conversationManager) {
+    public ChatController(ChatEngine chatEngine, ConversationManager conversationManager, SettingsManager settingsManager) {
         this.chatEngine = chatEngine;
         this.conversationManager = conversationManager;
+        this.settingsManager = settingsManager;
+    }
+
+    @GetMapping("/info")
+    public BotInfo getInfo() {
+        return new BotInfo(settingsManager.getSettings().getBotName());
     }
 
     @PostMapping("/create")
@@ -35,7 +34,27 @@ public class ChatController {
     }
 
     @PostMapping("/{conversationId}")
-    public String chat(@PathVariable UUID conversationId, @RequestBody String prompt) {
-        return chatEngine.chat(conversationId, prompt, defaultPersona);
+    public ChatResponse chat(@PathVariable UUID conversationId, @RequestBody String prompt) {
+        String botName = settingsManager.getSettings().getBotName();
+        
+        Persona dynamicPersona = new Persona(
+                botName.toLowerCase(),
+                "You are " + botName + ", an AI business assistant. " +
+                "IMPORTANT: You will be provided with documents (context) to help answer questions. " +
+                "These documents describe other people or companies. You are NOT the person described in the documents. " +
+                "If a document says 'I did X', it refers to the author, NOT to you. " +
+                "Always maintain your identity as " + botName + ". Refer to authors of documents in the third person. " +
+                "Provide direct, natural, and helpful answers. DO NOT include internal reasoning."
+        );
+        
+        try {
+            String content = chatEngine.chat(conversationId, prompt, dynamicPersona);
+            return new ChatResponse(content, true, null);
+        } catch (Exception e) {
+            return new ChatResponse(null, false, e.getMessage());
+        }
     }
+
+    public record BotInfo(String name) {}
+    public record ChatResponse(String content, boolean success, String error) {}
 }

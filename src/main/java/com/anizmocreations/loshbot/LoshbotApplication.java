@@ -15,8 +15,8 @@ public class LoshbotApplication {
 	}
 
 	@Bean
-	public VectorStore vectorStore(EmbeddingModel embeddingModel) {
-		return SimpleVectorStore.builder(embeddingModel).build();
+	public SimpleVectorStore vectorStore(org.springframework.beans.factory.ObjectProvider<EmbeddingModel> embeddingModelProvider) {
+		return SimpleVectorStore.builder(embeddingModelProvider.getIfAvailable()).build();
 	}
 
 }
