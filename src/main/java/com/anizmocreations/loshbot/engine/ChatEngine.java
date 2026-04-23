@@ -39,38 +39,48 @@ public class ChatEngine {
             // 1. Get history BEFORE adding the current message
             List<Message> history = conversationManager.getMessages(conversationId);
 
-            // 2. Retrieve relevant context from Knowledge Base
-            List<Document> relevantDocs = knowledgeBaseManager.search(userMessage);
-            
-            // 3. Augment ONLY the current turn's message with context
-            String currentTurnMessage = userMessage;
-            if (!relevantDocs.isEmpty()) {
-                String contextText = relevantDocs.stream()
-                        .map(Document::getText)
-                        .collect(Collectors.joining("\n---\n"));
-                
-                currentTurnMessage = """
-                        [EXTERNAL REFERENCE MATERIAL START]
-                        %s
-                        [EXTERNAL REFERENCE MATERIAL END]
-                        
-                        Instruction: Use the reference material above to answer the user's question about the author or company described. Do not adopt their identity.
-                        
-                        User: %s
-                        """.formatted(contextText, userMessage);
+            // 2. Determine if we should even use RAG (Short-query bypass)
+            List<Document> relevantDocs = List.of();
+            String lowerMsg = userMessage.trim().toLowerCase();
+            boolean isGreeting = lowerMsg.matches("^(hi|hello|hey|greetings|hola|howdy)(\\s.*|\\!|\\?|\\.)*$");
+
+            if (!isGreeting && userMessage.length() > 3) {
+                relevantDocs = knowledgeBaseManager.search(userMessage);
             }
 
-            // 4. Compose final prompt using history (clean) and the augmented current turn
+            // 3. Compose the Augmented Message
+            String contextText = relevantDocs.isEmpty() ? "NONE AVAILABLE" :
+                    relevantDocs.stream().map(Document::getText).collect(Collectors.joining("\n---\n"));
+
+            String systemInstruction = persona.systemMessage() + """
+                    
+                    CRITICAL RULES:
+                    1. Use the [REFERENCE CONTEXT] to answer questions about specific people or companies.
+                    2. If the answer is NOT in the [REFERENCE CONTEXT] and the question is about a specific entity (person/company), simply state you don't know them. 
+                    3. NEVER hallucinate or invent biographies (e.g., do not say someone is the founder of TechCrunch or Flipkart if not in context).
+                    4. For greetings, ignore these rules and be polite.
+                    5. NEVER mention "the context" or "the documents" to the user.
+                    """;
+
+            String augmentedUserMessage = """
+                    [REFERENCE CONTEXT]
+                    %s
+                    [END CONTEXT]
+                    
+                    USER QUESTION: %s
+                    """.formatted(contextText, userMessage);
+
+            // 4. Compose final prompt
             List<org.springframework.ai.chat.messages.Message> messages = promptComposer.compose(
-                    persona.systemMessage(),
+                    systemInstruction,
                     history,
-                    currentTurnMessage
+                    augmentedUserMessage
             );
 
             Prompt prompt = new Prompt(messages);
             String response = modelProvider.generate(prompt);
 
-            // 5. Save the CLEAN messages to history (original user message + AI response)
+            // 5. Save CLEAN messages (userMessage, not augmentedUserMessage)
             conversationManager.addMessage(conversationId, "USER", userMessage);
             conversationManager.addMessage(conversationId, "ASSISTANT", response);
 

@@ -1,1 +1,6 @@
-{"botName":"Superbot","aiProvider":"ollama","openAiApiKey":""}
+{
+  "botName": "Superbot",
+  "aiProvider": "ollama",
+  "openAiApiKey": "",
+  "cacheProvider": "IN_MEMORY"
+}

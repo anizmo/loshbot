@@ -33,4 +33,14 @@ public class KnowledgeBaseController {
             return ResponseEntity.internalServerError().body("Failed to process file: " + e.getMessage());
         }
     }
+
+    @PostMapping("/reset")
+    public ResponseEntity<String> resetKnowledgeBase() {
+        try {
+            knowledgeBaseManager.clearStore();
+            return ResponseEntity.ok("Knowledge base file deleted. Please restart the application for a fully clean state.");
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body("Failed to clear knowledge base: " + e.getMessage());
+        }
+    }
 }

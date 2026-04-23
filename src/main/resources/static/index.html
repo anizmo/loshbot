@@ -245,7 +245,7 @@
         }
 
         function AdminSettings() {
-            const [config, setConfig] = useState({ provider: 'ollama', apiKey: '', botName: '' });
+            const [config, setConfig] = useState({ provider: 'ollama', apiKey: '', botName: '', cacheProvider: 'IN_MEMORY' });
             const [status, setStatus] = useState(null);
             const [loading, setLoading] = useState(true);
 
@@ -286,25 +286,39 @@
                             <p className="text-[10px] text-slate-400 italic ml-1">The name visitors will see when interacting with your bot.</p>
                         </div>
 
-                        <div className="space-y-2">
-                            <label className="text-sm font-bold text-slate-700 ml-1">AI Provider</label>
-                            <select 
-                                value={config.provider} 
-                                onChange={e => setConfig({...config, provider: e.target.value})}
-                                className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none"
-                            >
-                                <option value="ollama">Local LLM (Ollama)</option>
-                                <option value="openai">Cloud LLM (OpenAI)</option>
-                            </select>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <label className="text-sm font-bold text-slate-700 ml-1">AI Provider</label>
+                                <select 
+                                    value={config.aiProvider} 
+                                    onChange={e => setConfig({...config, aiProvider: e.target.value})}
+                                    className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none"
+                                >
+                                    <option value="ollama">Local LLM (Ollama)</option>
+                                    <option value="openai">Cloud LLM (OpenAI)</option>
+                                </select>
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-sm font-bold text-slate-700 ml-1">Cache Provider</label>
+                                <select 
+                                    value={config.cacheProvider} 
+                                    onChange={e => setConfig({...config, cacheProvider: e.target.value})}
+                                    className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none"
+                                >
+                                    <option value="IN_MEMORY">In-Memory (Simple)</option>
+                                    <option value="REDIS">Redis (Distributed)</option>
+                                </select>
+                            </div>
                         </div>
 
-                        {config.provider === 'openai' && (
+                        {config.aiProvider === 'openai' && (
                             <div className="space-y-2 fade-in">
                                 <label className="text-sm font-bold text-slate-700 ml-1">OpenAI API Key</label>
                                 <input 
                                     type="password"
-                                    value={config.apiKey} 
-                                    onChange={e => setConfig({...config, apiKey: e.target.value})}
+                                    value={config.openAiApiKey} 
+                                    onChange={e => setConfig({...config, openAiApiKey: e.target.value})}
                                     placeholder="sk-..."
                                     className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none font-mono"
                                 />

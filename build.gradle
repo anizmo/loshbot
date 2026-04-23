@@ -23,12 +23,19 @@ ext {
 }
 
 dependencies {
-	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+	implementation 'org.springframework.boot:spring-boot-starter-web'
+	implementation 'org.springframework.boot:spring-boot-starter-aop:3.4.2'
+	implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+	implementation 'org.springframework.boot:spring-boot-starter-validation'
 	implementation 'org.springframework.ai:spring-ai-starter-model-ollama'
 	implementation 'org.springframework.ai:spring-ai-starter-model-openai'
 	// Added Document and Vector Store dependencies for RAG
 	implementation 'org.springframework.ai:spring-ai-pdf-document-reader'
 	implementation 'org.springframework.ai:spring-ai-pgvector-store'
+
+	implementation 'io.swagger.parser.v3:swagger-parser:2.1.22'
+	implementation 'io.netty:netty-resolver-dns-native-macos'
+
 	runtimeOnly 'com.h2database:h2'
 
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
@@ -37,6 +44,7 @@ dependencies {
 
 dependencyManagement {
 	imports {
+		mavenBom "org.springframework.boot:spring-boot-dependencies:4.0.2"
 		mavenBom "org.springframework.ai:spring-ai-bom:${springAiVersion}"
 	}
 }

@@ -23,7 +23,14 @@ public class SettingsManager {
 
     public void update(SystemSettings newSettings) {
         this.settings = newSettings;
+        applySettings();
         save();
+    }
+
+    private void applySettings() {
+        if (settings.getCacheProvider() != null) {
+            System.setProperty("loshbot.cache-provider", settings.getCacheProvider());
+        }
     }
 
     private void load() {
@@ -37,6 +44,7 @@ public class SettingsManager {
         } else {
             settings = new SystemSettings();
         }
+        applySettings();
     }
 
     private void save() {
