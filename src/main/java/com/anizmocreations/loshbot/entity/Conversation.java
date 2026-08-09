@@ -6,11 +6,15 @@ import java.util.UUID;
 
 public class Conversation implements Serializable {
 
-    private final UUID id;
-    private final UUID userId;
-    private final String title;
-    private final Instant createdAt;
+    private UUID id;
+    private UUID userId;
+    private String title;
+    private Instant createdAt;
     private Instant updatedAt;
+
+    // Default constructor for JSON deserialization (Redis)
+    public Conversation() {
+    }
 
     public Conversation(UUID id, UUID userId, String title, Instant createdAt) {
         this.id = id;
@@ -24,16 +28,32 @@ public class Conversation implements Serializable {
         return id;
     }
 
+    public void setId(UUID id) {
+        this.id = id;
+    }
+
     public UUID getUserId() {
         return userId;
+    }
+
+    public void setUserId(UUID userId) {
+        this.userId = userId;
     }
 
     public String getTitle() {
         return title;
     }
 
+    public void setTitle(String title) {
+        this.title = title;
+    }
+
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    public void setCreatedAt(Instant createdAt) {
+        this.createdAt = createdAt;
     }
 
     public Instant getUpdatedAt() {

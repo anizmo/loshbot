@@ -1,8 +1,8 @@
 package com.anizmocreations.loshbot.repo;
 
+import com.anizmocreations.loshbot.config.ConditionalOnCacheProvider;
 import com.anizmocreations.loshbot.entity.Conversation;
 import com.anizmocreations.loshbot.entity.Message;
-import com.anizmocreations.loshbot.entity.Role;
 import org.springframework.stereotype.Repository;
 
 import java.util.*;
@@ -10,6 +10,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 @Repository
+@ConditionalOnCacheProvider("IN_MEMORY")
 public class InMemoryConversationRepository implements ConversationRepository {
 
     private final Map<UUID, Conversation> conversations = new ConcurrentHashMap<>();

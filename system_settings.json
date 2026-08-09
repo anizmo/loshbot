@@ -2,5 +2,5 @@
   "botName": "Superbot",
   "aiProvider": "ollama",
   "openAiApiKey": "",
-  "cacheProvider": "IN_MEMORY"
+  "cacheProvider": "REDIS"
 }
